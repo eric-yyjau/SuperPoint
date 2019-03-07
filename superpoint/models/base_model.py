@@ -170,6 +170,7 @@ class BaseModel(metaclass=ABCMeta):
                     elif mode == Mode.EVAL:
                         tower_metrics.append(self._metrics(
                             net_outputs, shards[i], **self.config))
+                        self._image_summary(net_outputs, shards[i])
                     else:
                         tower_preds.append(net_outputs)
 
@@ -203,7 +204,7 @@ class BaseModel(metaclass=ABCMeta):
                         avg_grad = tf.multiply(tf.add_n(grads), 1. / len(grads))
                     gradvars.append((avg_grad, var))
                 self.loss = tf.reduce_mean(tower_losses)
-                tf.summary.scalar('loss', self.loss)
+                tf.summary.scalar('loss', self.loss, collections=['train'])
 
             # Create optimizer ops
             self.global_step = tf.Variable(0, trainable=False, name='global_step')
@@ -263,7 +264,8 @@ class BaseModel(metaclass=ABCMeta):
             if self.trainable:
                 self._train_graph(data)
             self._eval_graph(data)
-            self.summaries = tf.summary.merge_all()
+            self.summaries = tf.summary.merge_all('train')
+            self.summaries_image = tf.summary.merge_all('image_summary')
 
         # Prediction network with feed_dict
         if self.data_shape is None:
@@ -315,7 +317,8 @@ class BaseModel(metaclass=ABCMeta):
             if save_interval and checkpoint_path and (i+1) % save_interval == 0:
                 self.save(checkpoint_path)
             if 'validation' in self.datasets and i % validation_interval == 0:
-                metrics = self.evaluate('validation', mute=True)
+                print('Validating...')
+                metrics, image_summaries = self.evaluate('validation', mute=True)
                 tf.logging.info(
                         'Iter {:4d}: loss {:.4f}'.format(i, loss) +
                         ''.join([', {} {:.4f}'.format(m, metrics[m]) for m in metrics]))
@@ -326,6 +329,8 @@ class BaseModel(metaclass=ABCMeta):
                         tf.Summary.Value(tag=m, simple_value=v)
                         for m, v in metrics.items()])
                     train_writer.add_summary(metrics_summaries, i)
+                    train_writer.add_summary(image_summaries, i)
+                    print('-- Added image summaries at step %d.'%i)
 
                     if profile and i != 0:
                         fetched_timeline = timeline.Timeline(run_metadata.step_stats)
@@ -358,6 +363,8 @@ class BaseModel(metaclass=ABCMeta):
     def evaluate(self, dataset, max_iterations=None, mute=False):
         assert dataset in self.datasets
         self.sess.run(self.dataset_iterators[dataset].initializer)
+        image_summaries = self.sess.run(self.summaries_image, feed_dict={self.handle: self.dataset_handles[dataset]})
+        self.sess.run(self.dataset_iterators[dataset].initializer)
 
         if not mute:
             tf.logging.info('Starting evaluation of dataset \'{}\''.format(dataset))
@@ -385,7 +392,7 @@ class BaseModel(metaclass=ABCMeta):
         # List of dicts to dict of lists
         metrics = dict(zip(metrics[0], zip(*[m.values() for m in metrics])))
         metrics = {m: np.nanmean(metrics[m], axis=0) for m in metrics}
-        return metrics
+        return metrics, image_summaries
 
     def load(self, checkpoint_path):
         with tf.device('/cpu:0'):
