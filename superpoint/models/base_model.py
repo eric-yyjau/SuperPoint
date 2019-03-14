@@ -98,9 +98,10 @@ class BaseModel(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def __init__(self, data={}, n_gpus=1, data_shape=None, **config):
+    def __init__(self, data={}, lengths={}, n_gpus=1, data_shape=None, **config):
         self.datasets = data
         self.data_shape = data_shape
+        self.data_lengths = lengths
         self.n_gpus = n_gpus
         self.graph = tf.get_default_graph()
         self.name = self.__class__.__name__.lower()  # get child name
@@ -167,15 +168,17 @@ class BaseModel(metaclass=ABCMeta):
                         if i == 0:
                             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS,
                                                            scope)
+                        tower_metrics.append(self._metrics(
+                            net_outputs, shards[i], **self.config))
                     elif mode == Mode.EVAL:
                         tower_metrics.append(self._metrics(
                             net_outputs, shards[i], **self.config))
-                        self._image_summary(net_outputs, shards[i])
+                        # self._image_summary(net_outputs, shards[i])
                     else:
                         tower_preds.append(net_outputs)
 
         if mode == Mode.TRAIN:
-            return tower_losses, tower_gradvars, update_ops
+            return tower_losses, tower_gradvars, update_ops, tower_metrics
         elif mode == Mode.EVAL:
             return tower_metrics
         else:
@@ -185,8 +188,12 @@ class BaseModel(metaclass=ABCMeta):
                  for v in z]) for k in tower_preds[0]}
 
     def _train_graph(self, data):
-        tower_losses, tower_gradvars, update_ops = self._gpu_tower(
+        tower_losses, tower_gradvars, update_ops, tower_metrics = self._gpu_tower(
                 data, Mode.TRAIN, self.config['batch_size'])
+        with tf.device('/cpu:0'):
+            self.metrics_train = {m: tf.reduce_mean(tf.stack([t[m] for t in tower_metrics]))
+                            for m in tower_metrics[0]}
+            print('<<MMMMMMMMMMMMM')
 
         # Perform the consolidation on CPU
         gradvars = []
@@ -223,6 +230,11 @@ class BaseModel(metaclass=ABCMeta):
         pred_out = self._gpu_tower(data, Mode.PRED, self.config['pred_batch_size'])
         self.pred_out = {n: tf.identity(p, name=n) for n, p in pred_out.items()}
 
+    def _eval_image_graph(self, data, prefix='eval'):
+        net_outputs = self._model(data, Mode.TRAIN if prefix=='train' else Mode.EVAL, **self.config)
+        self._image_summary(net_outputs, data, prefix)
+        print('Building image summary....'+prefix)
+
     def _build_graph(self):
         # Training and evaluation network, if tf datasets provided
         if self.datasets:
@@ -237,9 +249,11 @@ class BaseModel(metaclass=ABCMeta):
                                 train_batch, output_shapes).prefetch(train_batch)
                         self.dataset_iterators[n] = d.make_one_shot_iterator()
                     else:
+                        d = d.repeat().shuffle(200, reshuffle_each_iteration=True)
                         d = d.padded_batch(self.config['eval_batch_size']*self.n_gpus,
                                            output_shapes)
-                        self.dataset_iterators[n] = d.make_initializable_iterator()
+                        # self.dataset_iterators[n] = d.make_initializable_iterator()
+                        self.dataset_iterators[n] = d.make_one_shot_iterator()
                     output_types = d.output_types
                     output_shapes = d.output_shapes
                     self.datasets[n] = d
@@ -262,10 +276,14 @@ class BaseModel(metaclass=ABCMeta):
 
             # Build the actual training and evaluation models
             if self.trainable:
-                self._train_graph(data)
-            self._eval_graph(data)
+                self._train_graph(self.dataset_iterators['training'].get_next())
+            self._eval_graph(self.dataset_iterators['validation'].get_next())
+            self._eval_image_graph(self.dataset_iterators['training'].get_next(), 'train')
+            self._eval_image_graph(self.dataset_iterators['validation'].get_next(), 'eval')
             self.summaries = tf.summary.merge_all('train')
-            self.summaries_image = tf.summary.merge_all('image_summary')
+            self.summaries_image_train = tf.summary.merge_all('train-image_summary')
+            self.summaries_image_eval = tf.summary.merge_all('eval-image_summary')
+
 
         # Prediction network with feed_dict
         if self.data_shape is None:
@@ -309,24 +327,36 @@ class BaseModel(metaclass=ABCMeta):
 
         tf.logging.info('Start training')
         for i in range(iterations):
+            print(i)
             loss, summaries, _ = self.sess.run(
                     [self.loss, self.summaries, self.trainer],
                     feed_dict={self.handle: self.dataset_handles['training']},
                     options=options, run_metadata=run_metadata)
+            if i % 50 == 0:
+                _, image_summaries, metrics = self.sess.run(
+                    [self.trainer, self.summaries_image_train, self.metrics_train],
+                    feed_dict={self.handle: self.dataset_handles['training']},
+                    options=options, run_metadata=run_metadata)
+                train_writer.add_summary(summaries, i)
+                metrics_summaries = tf.Summary(value=[
+                    tf.Summary.Value(tag='train_'+m, simple_value=v)
+                    for m, v in metrics.items()])
+                train_writer.add_summary(metrics_summaries, i)
+                if i % 200 == 0:
+                    train_writer.add_summary(image_summaries, i)
 
             if save_interval and checkpoint_path and (i+1) % save_interval == 0:
                 self.save(checkpoint_path)
             if 'validation' in self.datasets and i % validation_interval == 0:
                 print('Validating...')
-                metrics, image_summaries = self.evaluate('validation', mute=True)
+                metrics, image_summaries, summaries = self.evaluate('validation', max_iterations=10, mute=True)
                 tf.logging.info(
                         'Iter {:4d}: loss {:.4f}'.format(i, loss) +
                         ''.join([', {} {:.4f}'.format(m, metrics[m]) for m in metrics]))
 
                 if output_dir is not None:
-                    train_writer.add_summary(summaries, i)
                     metrics_summaries = tf.Summary(value=[
-                        tf.Summary.Value(tag=m, simple_value=v)
+                        tf.Summary.Value(tag='val_'+m, simple_value=v)
                         for m, v in metrics.items()])
                     train_writer.add_summary(metrics_summaries, i)
                     train_writer.add_summary(image_summaries, i)
@@ -362,9 +392,9 @@ class BaseModel(metaclass=ABCMeta):
 
     def evaluate(self, dataset, max_iterations=None, mute=False):
         assert dataset in self.datasets
-        self.sess.run(self.dataset_iterators[dataset].initializer)
-        image_summaries = self.sess.run(self.summaries_image, feed_dict={self.handle: self.dataset_handles[dataset]})
-        self.sess.run(self.dataset_iterators[dataset].initializer)
+        image_summaries = None
+        summaries = None
+        image_summaries = self.sess.run(self.summaries_image_eval, feed_dict={self.handle: self.dataset_handles[dataset]})
 
         if not mute:
             tf.logging.info('Starting evaluation of dataset \'{}\''.format(dataset))
@@ -378,8 +408,8 @@ class BaseModel(metaclass=ABCMeta):
                                feed_dict={self.handle: self.dataset_handles[dataset]}))
             except tf.errors.OutOfRangeError:
                 break
+            i += 1
             if max_iterations:
-                i += 1
                 if not mute:
                     pbar.update(1)
                 if i == max_iterations:
@@ -392,7 +422,7 @@ class BaseModel(metaclass=ABCMeta):
         # List of dicts to dict of lists
         metrics = dict(zip(metrics[0], zip(*[m.values() for m in metrics])))
         metrics = {m: np.nanmean(metrics[m], axis=0) for m in metrics}
-        return metrics, image_summaries
+        return metrics, image_summaries, summaries
 
     def load(self, checkpoint_path):
         with tf.device('/cpu:0'):

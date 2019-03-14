@@ -64,14 +64,14 @@ class MagicPoint(BaseModel):
 
         return {'precision': precision, 'recall': recall}
 
-    def _image_summary(self, outputs, inputs):
+    def _image_summary(self, outputs, inputs, prefix='eval'):
         for idx in range(5):
-            tf.summary.image('keypointmap_%d'%idx, tf.cast(tf.expand_dims(tf.gather(255*inputs['keypoint_map'], [idx]), -1), tf.uint8), collections=['image_summary'])
-            tf.summary.image('valid_mask_%d'%idx, tf.cast(tf.expand_dims(tf.gather(255*inputs['valid_mask'], [idx]), -1), tf.uint8), collections=['image_summary'])
-            tf.summary.image('logits_%d'%idx, tf.cast(tf.expand_dims(tf.gather(255*outputs['pred'], [idx]), -1), tf.uint8), collections=['image_summary'])
+            tf.summary.image(prefix+'-keypointmap_%d'%idx, tf.cast(tf.expand_dims(tf.gather(255*inputs['keypoint_map'], [idx]), -1), tf.uint8), collections=['image_summary'])
+            # tf.summary.image('valid_mask_%d'%idx, tf.cast(tf.expand_dims(tf.gather(255*inputs['valid_mask'], [idx]), -1), tf.uint8), collections=['image_summary'])
+            # tf.summary.image('logits_%d'%idx, tf.cast(tf.expand_dims(tf.gather(255*outputs['pred'], [idx]), -1), tf.uint8), collections=['image_summary'])
             overlay = tf.concat([tf.expand_dims(tf.gather(255*inputs['keypoint_map'], [idx]), -1), tf.expand_dims(tf.gather(255*outputs['pred'], [idx]), -1), tf.zeros_like(tf.expand_dims(tf.gather(255*outputs['pred'], [idx]), -1))], axis=3)
             image_rgb = tf.tile(tf.gather(inputs['image'], [idx]), [1, 1, 1, 3])
             overlay = tf.where(tf.tile(tf.reduce_sum(tf.to_float(overlay), axis=3, keepdims=True)>0, [1, 1, 1, 3]), tf.to_float(overlay), image_rgb)
             overlay = tf.cast(tf.clip_by_value(overlay, 0, 255), tf.uint8)
-            tf.summary.image('overlay_%d'%idx, overlay, collections=['image_summary'])
-        print('=== Defined val image summaries.')
+            tf.summary.image(prefix+'-overlay_%d'%idx, overlay, collections=[prefix+'-image_summary'])
+        print('=== Defined %s image summaries.'%prefix)

@@ -66,8 +66,9 @@ def _init_graph(config, with_dataset=False):
     logging.info('Number of GPUs detected: {}'.format(n_gpus))
 
     dataset = get_dataset(config['data']['name'])(**config['data'])
+    print(dataset.lengths, '-------')
     model = get_model(config['model']['name'])(
-            data={} if with_dataset else dataset.get_tf_datasets(),
+            data={} if with_dataset else dataset.get_tf_datasets(), lengths=dataset.lengths,
             n_gpus=n_gpus, **config['model'])
     model.__enter__()
     if with_dataset:

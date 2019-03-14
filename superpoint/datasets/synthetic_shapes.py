@@ -147,7 +147,10 @@ class SyntheticShapes(BaseDataset):
             perm = np.random.RandomState(0).permutation(len(splits[s]['images']))
             for obj in ['images', 'points']:
                 splits[s][obj] = np.array(splits[s][obj])[perm].tolist()
-        return splits
+
+        lengths = {s: len(splits[s]['images']) for s in ['training', 'validation', 'test']}
+        print(lengths, '========')
+        return splits, lengths
 
     def _get_data(self, filenames, split_name, **config):
 
