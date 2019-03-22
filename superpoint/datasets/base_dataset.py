@@ -100,6 +100,7 @@ class BaseDataset(metaclass=ABCMeta):
         self.config = dict_update(getattr(self, 'default_config', {}), config)
 
         self.dataset, self.lengths = self._init_dataset(**self.config)
+#         self.dataset = self._init_dataset(**self.config)
 
         self.tf_splits = {}
         self.tf_next = {}

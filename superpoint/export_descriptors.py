@@ -51,10 +51,40 @@ if __name__ == '__main__':
                     'desc': pred1['descriptors'],
                     'warped_desc': pred2['descriptors'],
                     'homography': data['homography']}
+            ##### sparse
+            sparse = True
 
+            def getSparseFeatures(heatmap, desc, verbose=False):
+                from models.model_wrap import SuperPointFrontend_torch
+                fe = SuperPointFrontend_torch(weights_path='', nms_dist=4, conf_thresh=0.01, nn_thresh=0.7, load=False)
+                points = fe.getPtsFromHeatmap(heatmap)
+                print("pts: ", points.shape)
+                def getSparseDesc(desc, pts):
+                    return desc[pts[1,:].astype(int), pts[0, :].astype(int)]
+                desc = getSparseDesc(desc, points)
+                return points, desc
+            if sparse:
+                prob, desc = getSparseFeatures(pred['prob'], pred['desc'])
+                """
+                prob (3, N1)
+                desc (N1, 256)
+                """
+                pred['prob'], pred['desc'] = prob.transpose(), desc
+                prob, desc = getSparseFeatures(pred['warped_prob'], pred['warped_desc'])
+                """
+                prob (3, N1)
+                desc (N1, 256)
+                """
+                pred['warped_prob'], pred['warped_desc'] = prob.transpose(), desc
+                
+            
             if not ('name' in data):
                 pred.update(data)
             filename = data['name'].decode('utf-8') if 'name' in data else str(i)
+            #### update pred
+            pred.update({'image': data['image'].squeeze()})
+            pred.update({'warped_image': data['warped_image'].squeeze()})
+            
             filepath = Path(output_dir, '{}.npz'.format(filename))
             np.savez_compressed(filepath, **pred)
             i += 1

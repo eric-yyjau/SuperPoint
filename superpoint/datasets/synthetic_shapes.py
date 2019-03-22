@@ -127,10 +127,10 @@ class SyntheticShapes(BaseDataset):
 
             # Untar locally
             tf.logging.info('Extracting archive for primitive {}.'.format(primitive))
-            # tar = tarfile.open(tar_path)
+            tar = tarfile.open(tar_path)
             temp_dir = Path(os.environ['TMPDIR'])
-            # tar.extractall(path=temp_dir)
-            # tar.close()
+            tar.extractall(path=temp_dir)
+            tar.close()
 
             # Gather filenames in all splits, optionally truncate
             truncate = config['truncate'].get(primitive, 1)

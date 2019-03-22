@@ -27,6 +27,7 @@ class PatchesDataset(BaseDataset):
         image_paths = []
         warped_image_paths = []
         homographies = []
+        print("output alteration: ", config['alteration'])
         for path in folder_paths:
             if config['alteration'] == 'i' and path.stem[0] != 'i':
                 continue
@@ -45,7 +46,8 @@ class PatchesDataset(BaseDataset):
         files = {'image_paths': image_paths,
                  'warped_image_paths': warped_image_paths,
                  'homography': homographies}
-        return files
+        _ = None
+        return files, _
 
     def _get_data(self, files, split_name, **config):
         def _read_image(path):
@@ -91,5 +93,5 @@ class PatchesDataset(BaseDataset):
 
         data = tf.data.Dataset.zip({'image': images, 'warped_image': warped_images,
                                     'homography': homographies})
-
+        _ = None
         return data

@@ -108,6 +108,7 @@ class BaseModel(metaclass=ABCMeta):
         self.trainable = getattr(self, 'trainable', True)
 
         # Update config
+        print("load base model")
         self.config = dict_update(self._default_config,
                                   getattr(self, 'default_config', {}))
         self.config = dict_update(self.config, config)
@@ -280,7 +281,8 @@ class BaseModel(metaclass=ABCMeta):
             self._eval_graph(self.dataset_iterators['validation'].get_next())
             self._eval_image_graph(self.dataset_iterators['training'].get_next(), 'train')
             self._eval_image_graph(self.dataset_iterators['validation'].get_next(), 'eval')
-            self.summaries = tf.summary.merge_all('train')
+            self.summaries = tf.summary.merge_all()
+#             self.summaries_train = tf.summary.merge_all('train')
             self.summaries_image_train = tf.summary.merge_all('train-image_summary')
             self.summaries_image_eval = tf.summary.merge_all('eval-image_summary')
 
@@ -431,6 +433,7 @@ class BaseModel(metaclass=ABCMeta):
             checkpoint_path = tf.train.latest_checkpoint(checkpoint_path)
             if checkpoint_path is None:
                 raise ValueError('Checkpoint directory is empty.')
+        print("load checkpoint: ", checkpoint_path)
         saver.restore(self.sess, checkpoint_path)
 
     def save(self, checkpoint_path):

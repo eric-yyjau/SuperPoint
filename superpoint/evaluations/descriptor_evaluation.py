@@ -6,6 +6,9 @@ from glob import glob
 from superpoint.settings import EXPER_PATH
 
 
+def testFunction():
+    print("test function")
+
 def get_paths(exper_name):
     """
     Return a list of paths to the outputs of the experiment.
@@ -123,6 +126,7 @@ def homography_estimation(exper_name, keep_k_points=1000,
     Outputs the correctness score.
     """
     paths = get_paths(exper_name)
+    print("paths: ", paths)
     correctness = []
     for path in paths:
         data = np.load(path)
@@ -142,6 +146,7 @@ def get_homography_matches(exper_name, keep_k_points=1000,
     keypoints1[i] is matched with keypoints2[matches[i]]
     """
     paths = get_paths(exper_name)
+    print("paths: ", paths)
     outputs = []
     for path in paths[:num_images]:
         data = np.load(path)

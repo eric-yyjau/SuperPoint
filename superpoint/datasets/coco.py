@@ -56,8 +56,10 @@ class Coco(BaseDataset):
 
         tf.data.Dataset.map_parallel = lambda self, fn: self.map(
                 fn, num_parallel_calls=config['num_parallel_calls'])
-
-        return files
+        
+        ##### checkt
+        length = 1
+        return files, length
 
     def _get_data(self, files, split_name, **config):
         has_keypoints = 'label_paths' in files
