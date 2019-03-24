@@ -91,7 +91,10 @@ def descriptor_loss(descriptors, warped_descriptors, homographies,
     warped_coord_cells = tf.reshape(warped_coord_cells,
                                     [batch_size, Hc, Wc, 1, 1, 2])
     cell_distances = tf.norm(coord_cells - warped_coord_cells, axis=-1)
-    s = tf.to_float(tf.less_equal(cell_distances, config['grid_size'] - 0.5))
+    margin = 4
+    print("descriptor loss distance: ", config['grid_size'] - margin)
+    s = tf.to_float(tf.less_equal(cell_distances, config['grid_size'] - margin))
+
     # s[id_batch, h, w, h', w'] == 1 if the point of coordinates (h, w) warped by the
     # homography is at a distance from (h', w') less than config['grid_size']
     # and 0 otherwise

@@ -82,8 +82,8 @@ if __name__ == '__main__':
                 pred.update(data)
             filename = data['name'].decode('utf-8') if 'name' in data else str(i)
             #### update pred
-            pred.update({'image': data['image'].squeeze()})
-            pred.update({'warped_image': data['warped_image'].squeeze()})
+            pred.update({'image': data['image'].squeeze()/255})
+            pred.update({'warped_image': data['warped_image'].squeeze()/255})
             
             filepath = Path(output_dir, '{}.npz'.format(filename))
             np.savez_compressed(filepath, **pred)

@@ -3,8 +3,8 @@ data:
     dataset: 'hpatches'  # 'coco' 'hpatches'
     alteration: 'all'  # 'all' 'i' 'v'
     preprocessing:
-#         resize: [480, 640]  # False for coco
-        resize: [240, 320]  # False for coco
+        resize: [480, 640]  # False for coco
+#         resize: [240, 320]  # False for coco
 model:
     name: 'super_point'
     data_format: 'channels_last'
