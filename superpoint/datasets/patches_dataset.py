@@ -56,9 +56,26 @@ class PatchesDataset(BaseDataset):
         def _preprocess(image):
             tf.Tensor.set_shape(image, [None, None, 3])
             image = tf.image.rgb_to_grayscale(image)
-            if config['preprocessing']['resize']:
-                image = pipeline.ratio_preserving_resize(image,
-                                                         **config['preprocessing'])
+#             if config['preprocessing']['resize']:
+#                 image = pipeline.ratio_preserving_resize(image,
+#                                                          **config['preprocessing'])
+#             s = max(self.sizer /image.shape[:2])
+#             image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            target_size = tf.convert_to_tensor(config['resize'])
+            scales = tf.to_float(tf.divide(target_size, tf.shape(image)[:2]))
+            scales = tf.reduce_max(scales)
+            new_size = tf.to_float(tf.divide(target_size, scales))
+#             new_size = tf.to_float(tf.shape(image)[:2]) * tf.reduce_max(scales)
+            print("new size: ", new_size)
+            image = image[:int(new_size[0]),:int(new_size[1])]
+#             image = cv2.resize(image, (self.sizer[1], self.sizer[0]),
+#                                      interpolation=cv2.INTER_AREA)
+            
+            image = tf.image.resize_images(image, tf.to_int32(new_size),
+                                    method=tf.image.ResizeMethod.BILINEAR)
+            
+#             image = image.astype('float32') / 255.0
+            
             return tf.to_float(image)
 
         def _warp_image(image):
