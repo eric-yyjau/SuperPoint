@@ -50,15 +50,44 @@ class PatchesDataset(BaseDataset):
         return files, _
 
     def _get_data(self, files, split_name, **config):
-        def _read_image(path):
+#         def _read_image(path):
+#             sizer = np.array(config['preprocessing']['resize'])
+# #             image = cv2.imread(path.decode('utf-8'))
+#             image = cv2.imread(path.decode('utf-8'))
+#             print("image pre-processing: ", image.shape)
+#
+#             s = max(sizer /image.shape[:2])
+#             print("s: ", s)
+#
+#             image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+#             print("image convert gray: ", image.shape)
+#             image = image[:int(sizer[0]/s),:int(sizer[1]/s)]
+#             image = cv2.resize(image, (sizer[1], sizer[0]),
+#                                      interpolation=cv2.INTER_AREA)
+# #             image = image.astype('float32') / 255.0
+#             print("image post-processing: ", image.shape)
+#             return image[:,:,np.newaxis]
+#
+#         def _preprocess(image):
+# #             tf.Tensor.set_shape(image, [None, None, 3])
+# #             image = tf.image.rgb_to_grayscale(image)
+# #                 image = pipeline.ratio_preserving_resize(image,
+# #                                                          **config['preprocessing'])
+# #             s = max(self.sizer /image.shape[:2])
+# #             image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+#
+#             return tf.to_float(image)
+
+
+        def _resize_image_cv(image):
             sizer = np.array(config['preprocessing']['resize'])
 #             image = cv2.imread(path.decode('utf-8'))
-            image = cv2.imread(path.decode('utf-8'))
+#             image = cv2.imread(path.decode('utf-8'))
             print("image pre-processing: ", image.shape)
-            
+
             s = max(sizer /image.shape[:2])
             print("s: ", s)
-            
+
             image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
             print("image convert gray: ", image.shape)
             image = image[:int(sizer[0]/s),:int(sizer[1]/s)]
@@ -68,14 +97,24 @@ class PatchesDataset(BaseDataset):
             print("image post-processing: ", image.shape)
             return image[:,:,np.newaxis]
 
+        def _read_image(path):
+            return cv2.imread(path.decode('utf-8'))
+
+        def _read_image_preprocess(path):
+            image = cv2.imread(path.decode('utf-8'))
+            image = _resize_image_cv(image)
+            return image
+
+
         def _preprocess(image):
-#             tf.Tensor.set_shape(image, [None, None, 3])
-#             image = tf.image.rgb_to_grayscale(image)
-#                 image = pipeline.ratio_preserving_resize(image,
-#                                                          **config['preprocessing'])
-#             s = max(self.sizer /image.shape[:2])
-#             image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-            
+            # tf.Tensor.set_shape(image, [None, None, 3])
+            # image = tf.image.rgb_to_grayscale(image)
+            # if config['preprocessing']['resize']:
+            #     image = pipeline.ratio_preserving_resize(image,
+            #                                              **config['preprocessing'])
+
+            # image = _resize_image_cv(image)
+
             return tf.to_float(image)
 
         def _warp_image(image):
@@ -116,7 +155,10 @@ class PatchesDataset(BaseDataset):
         #                                         'homography': homographies})
 
         # images_ori = images.copy()
-        images = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
+
+
+        images_ori = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
+        images = images.map(lambda path: tf.py_func(_read_image_preprocess, [path], tf.uint8))
         print("config['preprocessing']['resize']", config['preprocessing']['resize'])
         
         ##### check #####
@@ -124,14 +166,14 @@ class PatchesDataset(BaseDataset):
 
 #         if config['preprocessing']['resize']:
         print("process homography!")
-        homographies = tf.data.Dataset.zip({'image': images,
+        homographies = tf.data.Dataset.zip({'image': images_ori,
                                                 'homography': homographies})
         homographies = homographies.map(_adapt_homography_to_preprocessing)
 
 
         images = images.map(_preprocess)
         warped_images = tf.data.Dataset.from_tensor_slices(files['warped_image_paths'])
-        warped_images = warped_images.map(lambda path: tf.py_func(_read_image,
+        warped_images = warped_images.map(lambda path: tf.py_func(_read_image_preprocess,
                                                                   [path],
                                                                   tf.uint8))
         warped_images = warped_images.map(_preprocess)
