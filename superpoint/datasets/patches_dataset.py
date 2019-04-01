@@ -85,12 +85,13 @@ class PatchesDataset(BaseDataset):
                                                 tf.shape(image)[:2]), tf.float32))
 #             s = tf.maximum(target_size/image.shape[:2])
             print("scale: ", s)
-            mat =tf.convert_to_tensor(np.array([[1,1,s], [1,1,s], [1/s,1/s,1]]))
-#             down_scale = tf.diag(tf.stack([1/s, 1/s, tf.constant(1.)]))
-#             up_scale = tf.diag(tf.stack([s, s, tf.constant(1.)]))
-#             H = tf.matmul(up_scale, tf.matmul(H, down_scale))
-            return H*mat
-        
+            # mat =tf.convert_to_tensor(np.array([[1,1,s], [1,1,s], [1/s,1/s,1]]))
+            down_scale = tf.diag(tf.stack([1/s, 1/s, tf.constant(1.)]))
+            up_scale = tf.diag(tf.stack([s, s, tf.constant(1.)]))
+            H = tf.matmul(up_scale, tf.matmul(H, down_scale))
+            return H
+            # return H*mat
+
         images = tf.data.Dataset.from_tensor_slices(files['image_paths'])
         images = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
         homographies = tf.data.Dataset.from_tensor_slices(np.array(files['homography']))
