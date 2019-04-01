@@ -110,18 +110,25 @@ class PatchesDataset(BaseDataset):
             return H
         
         images = tf.data.Dataset.from_tensor_slices(files['image_paths'])
-        images = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
         homographies = tf.data.Dataset.from_tensor_slices(np.array(files['homography']))
+        ## original images
+        homographies = tf.data.Dataset.zip({'image': images,
+                                                'homography': homographies})
+
+        # images_ori = images.copy()
+        images = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
         print("config['preprocessing']['resize']", config['preprocessing']['resize'])
         
         ##### check #####
+        ### change the order, homography before process images
+
 #         if config['preprocessing']['resize']:
         print("process homography!")
-        homographies = tf.data.Dataset.zip({'image': images,
-                                                'homography': homographies})
+        # homographies = tf.data.Dataset.zip({'image': images,
+        #                                         'homography': homographies})
         homographies = homographies.map(_adapt_homography_to_preprocessing)
-        
-        
+
+
         images = images.map(_preprocess)
         warped_images = tf.data.Dataset.from_tensor_slices(files['warped_image_paths'])
         warped_images = warped_images.map(lambda path: tf.py_func(_read_image,
