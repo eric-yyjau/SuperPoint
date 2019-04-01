@@ -112,8 +112,8 @@ class PatchesDataset(BaseDataset):
         images = tf.data.Dataset.from_tensor_slices(files['image_paths'])
         homographies = tf.data.Dataset.from_tensor_slices(np.array(files['homography']))
         ## original images
-        homographies = tf.data.Dataset.zip({'image': images,
-                                                'homography': homographies})
+        # homographies = tf.data.Dataset.zip({'image': images,
+        #                                         'homography': homographies})
 
         # images_ori = images.copy()
         images = images.map(lambda path: tf.py_func(_read_image, [path], tf.uint8))
@@ -124,8 +124,8 @@ class PatchesDataset(BaseDataset):
 
 #         if config['preprocessing']['resize']:
         print("process homography!")
-        # homographies = tf.data.Dataset.zip({'image': images,
-        #                                         'homography': homographies})
+        homographies = tf.data.Dataset.zip({'image': images,
+                                                'homography': homographies})
         homographies = homographies.map(_adapt_homography_to_preprocessing)
 
 
